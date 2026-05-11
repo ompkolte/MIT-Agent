@@ -31,6 +31,27 @@ def test_short_followup_with_marker_still_caught() -> None:
     assert is_followup_query("what about that?", state) is True
 
 
+def test_possessive_pronouns_are_followups() -> None:
+    """Regression: 'what are her achievements?' after a turn about Dr. Sunita Barve was
+    not being rewritten — retrieval ran on raw text and returned a different person."""
+    state = _state_with_turn(content="who is dr sunita barve")
+    assert is_followup_query("what are her achievements?", state) is True
+    assert is_followup_query("his research areas?", state) is True
+    assert is_followup_query("tell me about their work", state) is True
+
+
+def test_subject_pronoun_at_start_is_followup() -> None:
+    state = _state_with_turn()
+    assert is_followup_query("She also has publications?", state) is True
+    assert is_followup_query("he is HOD of which dept?", state) is True
+
+
+def test_pronoun_only_followup_without_history_still_not_followup() -> None:
+    """Pronoun in a fresh conversation has no referent — still not a followup."""
+    fresh = ConversationState(session_id="s1")
+    assert is_followup_query("what are her achievements?", fresh) is False
+
+
 def test_is_followup_with_marker() -> None:
     state = _state_with_turn()
     assert is_followup_query("What about placements for the same program?", state) is True

@@ -1,4 +1,5 @@
 import json
+import time as _time
 
 try:
     from dotenv import load_dotenv
@@ -13,8 +14,11 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from backend.answering.followup_resolution import resolve_followup_query
 from backend.answering.grounded_answering import GroundedAnsweringService
 from backend.answering.models.answer import GroundedAnswer, LatencyBreakdown
-from backend.api.chat_models import AnswerRequest, ChatRequest, ChatResponse
+from backend.api.chat_models import AnswerRequest, CacheHitInfo, ChatRequest, ChatResponse
 from backend.api.chat_ui import CHAT_UI_HTML
+from backend.cache.cache_router import CacheRouter
+from backend.cache.models.cache_entry import CacheStats
+from backend.cache.semantic_cache import SemanticCache
 from backend.config.settings import settings
 from backend.context.context_builder import build_grounded_context
 from backend.context.validators import ContextBuildRequest, GroundedContext
@@ -59,6 +63,7 @@ _bm25_service: BM25RetrievalService | None = None
 _dense_service: DenseRetrievalService | None = None
 _hybrid_service: HybridRetrievalService | None = None
 _reranked_service: RerankedRetrievalService | None = None
+_semantic_cache: SemanticCache | None = None
 _conversation_memory = ConversationMemory()
 
 
@@ -88,6 +93,14 @@ def _get_reranked() -> RerankedRetrievalService:
     if _reranked_service is None:
         _reranked_service = RerankedRetrievalService(hybrid=_get_hybrid())
     return _reranked_service
+
+
+def _get_cache() -> SemanticCache:
+    """Reuses the dense retrieval service's EmbeddingModel — no second BGE model load."""
+    global _semantic_cache
+    if _semantic_cache is None:
+        _semantic_cache = SemanticCache(embedder=_get_dense().model)
+    return _semantic_cache
 
 
 @app.get("/retrieval/search", response_model=SearchResponse)
@@ -190,15 +203,51 @@ def _build_answering_service(request: AnswerRequest) -> GroundedAnsweringService
 
 @app.post("/answer", response_model=GroundedAnswer)
 async def answer(request: AnswerRequest) -> GroundedAnswer:
-    grounded_context = _build_grounded_context_for(request)
+    # Cache lookup first (when enabled) — short-circuits the full RAG pipeline on hit.
+    if request.use_cache:
+        hit = _get_cache().lookup(request.query)
+        if hit is not None:
+            cached = hit.entry.answer
+            return cached.model_copy(update={"query": request.query})
+
+    grounded_context, reranked = _retrieve_and_build_context(request)
     service = _build_answering_service(request)
-    return service.answer(request.query, grounded_context)
+    result = service.answer(request.query, grounded_context)
+    if request.use_cache:
+        _get_cache().store_answer(
+            query=request.query,
+            answer=result,
+            intent=reranked.intent if reranked else None,
+            primary_section_type=_primary_section_type(reranked),
+            primary_page_type=_primary_page_type(reranked),
+        )
+    return result
+
+
+def _primary_section_type(reranked) -> str | None:
+    if not reranked or not getattr(reranked, "results", None):
+        return None
+    counts: dict[str, int] = {}
+    for r in reranked.results:
+        st = getattr(r, "section_type", None)
+        if st:
+            counts[st] = counts.get(st, 0) + 1
+    return max(counts, key=lambda k: counts[k]) if counts else None
+
+
+def _primary_page_type(reranked) -> str | None:
+    if not reranked or not getattr(reranked, "results", None):
+        return None
+    counts: dict[str, int] = {}
+    for r in reranked.results:
+        pt = getattr(r, "page_type", None)
+        if pt:
+            counts[pt] = counts.get(pt, 0) + 1
+    return max(counts, key=lambda k: counts[k]) if counts else None
 
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
-    import time as _time
-
     t_total = _time.perf_counter()
     session_id = ensure_session_id(request.session_id)
     state = _conversation_memory.append_user_turn(session_id, request.query)
@@ -224,6 +273,43 @@ async def chat(request: ChatRequest) -> ChatResponse:
         model=request.model,
     )
 
+    # ── Cache lookup (after rewrite, before retrieval). On hit we skip retrieval + LLM.
+    cache_info = CacheHitInfo()
+    cached_hit = _get_cache().lookup(resolved_query) if request.use_cache else None
+    if cached_hit is not None:
+        cached_answer = cached_hit.entry.answer.model_copy(
+            update={
+                "query": request.query,
+                "rewritten_query": resolved_query if was_rewritten else None,
+            }
+        )
+        cache_info = CacheHitInfo(
+            hit=True,
+            similarity=cached_hit.similarity,
+            primary_section_type=cached_hit.entry.primary_section_type,
+            cache_age_seconds=round(_time.time() - cached_hit.entry.created_at, 1),
+        )
+        cached_answer.latency = LatencyBreakdown(
+            rewrite_ms=round(rewrite_ms, 1) if rewrite_ms is not None else None,
+            total_ms=round((_time.perf_counter() - t_total) * 1000, 1),
+        )
+        state = _conversation_memory.append_assistant_turn(
+            session_id=session_id,
+            content=cached_answer.answer,
+            citations=[c.chunk_id for c in cached_answer.citations],
+            rewritten_query=resolved_query if was_rewritten else None,
+            intent=cached_hit.entry.intent,
+            used_chunks=cached_answer.used_chunks,
+        )
+        return ChatResponse(
+            session_id=session_id,
+            answer=cached_answer,
+            rewritten_query=resolved_query if was_rewritten else None,
+            was_rewritten=was_rewritten,
+            cache=cache_info,
+            conversation_state=state,
+        )
+
     t_retrieval = _time.perf_counter()
     grounded_context, reranked_response = _retrieve_and_build_context(answer_request)
     retrieval_ms = (_time.perf_counter() - t_retrieval) * 1000
@@ -240,6 +326,16 @@ async def chat(request: ChatRequest) -> ChatResponse:
         rewritten_query=resolved_query if was_rewritten else None,
     )
     llm_total_ms = (_time.perf_counter() - t_llm) * 1000
+
+    # Store eligible answers on miss.
+    if request.use_cache:
+        _get_cache().store_answer(
+            query=resolved_query,
+            answer=grounded_answer,
+            intent=reranked_response.intent,
+            primary_section_type=_primary_section_type(reranked_response),
+            primary_page_type=_primary_page_type(reranked_response),
+        )
     # Split LLM total into generate vs judge using the token counts (judge ran iff judge_used).
     if grounded_answer.hallucination.judge_used:
         # Approximate: judge tokens ≈ judge_input+output; split proportional to total.
@@ -279,6 +375,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         answer=grounded_answer,
         rewritten_query=resolved_query if was_rewritten else None,
         was_rewritten=was_rewritten,
+        cache=cache_info,
         conversation_state=state,
     )
 
@@ -315,12 +412,26 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     )
 
     def event_stream():
+        # Include the numbered candidate citations so the chat UI can:
+        # (a) auto-preview the top source page immediately as streaming starts, and
+        # (b) make [N] markers in the streamed answer clickable to switch the preview.
+        # The [N] indices in the LLM's output map 1:1 to these context_blocks because the
+        # prompt assembler numbers them in the same order.
         opening = {
             "session_id": session_id,
             "rewritten_query": resolved_query if was_rewritten else None,
             "was_rewritten": was_rewritten,
             "intent": grounded_context.intent,
             "grounding_confidence": grounded_context.grounding_confidence,
+            "citations": [
+                {
+                    "index": i + 1,
+                    "source_url": block.source_url,
+                    "title": block.title,
+                    "section_path": list(block.section_path or []),
+                }
+                for i, block in enumerate(grounded_context.context_blocks)
+            ],
         }
         yield b"event: meta\ndata: " + json.dumps(opening).encode() + b"\n\n"
         if not grounded_context.context_blocks:
@@ -351,6 +462,42 @@ async def conversation_state(session_id: str):
 async def reset_conversation(session_id: str):
     _conversation_memory.reset(session_id)
     return {"session_id": session_id, "reset": True}
+
+
+@app.get("/cache/stats", response_model=CacheStats)
+async def cache_stats() -> CacheStats:
+    return _get_cache().stats()
+
+
+@app.get("/cache/inspect")
+async def cache_inspect(limit: int = 25):
+    """Return the most recently used cache entries for debugging."""
+    entries = sorted(
+        _get_cache().all_entries(), key=lambda e: e.last_used_at, reverse=True
+    )[:limit]
+    return [
+        {
+            "cache_key": e.cache_key,
+            "normalized_query": e.normalized_query,
+            "original_query": e.original_query,
+            "primary_section_type": e.primary_section_type,
+            "primary_page_type": e.primary_page_type,
+            "grounding_confidence": e.grounding_confidence,
+            "hallucination_risk": e.hallucination_risk,
+            "hit_count": e.hit_count,
+            "created_at": e.created_at,
+            "last_used_at": e.last_used_at,
+            "answer_preview": e.answer.answer[:150],
+            "citations": [c.source_url for c in e.answer.citations],
+        }
+        for e in entries
+    ]
+
+
+@app.delete("/cache/clear")
+async def cache_clear():
+    cleared = _get_cache().clear()
+    return {"cleared": cleared}
 
 
 @app.get("/chat/ui", response_class=HTMLResponse)

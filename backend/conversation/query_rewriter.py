@@ -25,6 +25,12 @@ FOLLOWUP_MARKERS: list[str] = [
     r"\bthat one\b",
     r"\bthe same\b",
     r"^\s*(?:and|or|but)\b",
+    # Possessive / object pronouns — almost always reference an entity from a prior turn.
+    # "what are her achievements" was running on raw text before this and retrieving the
+    # wrong person; the rewriter must fire to substitute the named entity from history.
+    r"\b(?:her|hers|his|him|their|theirs|them)\b",
+    # Subject pronouns at the start of the question.
+    r"^\s*(?:she|he|they|it)\b",
 ]
 
 

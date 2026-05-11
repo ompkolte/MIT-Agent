@@ -1,0 +1,187 @@
+{
+  "provider": "mock",
+  "model": "mock-grounded",
+  "queries": 10,
+  "phase1_prime_avg_ms": 1909.11,
+  "phase2_replay_avg_hit_ms": 13.21,
+  "phase2_hit_rate": 0.9,
+  "phase2_rag_replays": 1,
+  "speedup_on_hit_x": 144.52,
+  "prime": [
+    {
+      "query": "What is MCA eligibility?",
+      "latency_ms": 8799.61,
+      "path": "rag",
+      "similarity": null,
+      "n_citations": 4,
+      "grounding_confidence": 0.5286
+    },
+    {
+      "query": "What is the fee structure for BTech?",
+      "latency_ms": 1211.51,
+      "path": "rag",
+      "similarity": null,
+      "n_citations": 3,
+      "grounding_confidence": 0.5847
+    },
+    {
+      "query": "Who is the dean of mechanical engineering?",
+      "latency_ms": 1308.67,
+      "path": "rag",
+      "similarity": null,
+      "n_citations": 3,
+      "grounding_confidence": 0.5472
+    },
+    {
+      "query": "What are the placement statistics?",
+      "latency_ms": 605.51,
+      "path": "rag",
+      "similarity": null,
+      "n_citations": 6,
+      "grounding_confidence": 0.4911
+    },
+    {
+      "query": "What is the hostel like?",
+      "latency_ms": 1163.88,
+      "path": "rag",
+      "similarity": null,
+      "n_citations": 5,
+      "grounding_confidence": 0.5153
+    },
+    {
+      "query": "Tell me about the IEEE student branch.",
+      "latency_ms": 1135.64,
+      "path": "rag",
+      "similarity": null,
+      "n_citations": 5,
+      "grounding_confidence": 0.5057
+    },
+    {
+      "query": "What is the curriculum for BTech CSE?",
+      "latency_ms": 1271.02,
+      "path": "rag",
+      "similarity": null,
+      "n_citations": 4,
+      "grounding_confidence": 0.6304
+    },
+    {
+      "query": "How is admission to BTech done?",
+      "latency_ms": 1180.94,
+      "path": "rag",
+      "similarity": null,
+      "n_citations": 4,
+      "grounding_confidence": 0.5827
+    },
+    {
+      "query": "What is the BTech ENTC curriculum?",
+      "latency_ms": 1237.57,
+      "path": "rag",
+      "similarity": null,
+      "n_citations": 4,
+      "grounding_confidence": 0.581
+    },
+    {
+      "query": "Does MITAOE have NAAC accreditation?",
+      "latency_ms": 1176.74,
+      "path": "rag",
+      "similarity": null,
+      "n_citations": 4,
+      "grounding_confidence": 0.6877
+    }
+  ],
+  "replay": [
+    {
+      "query": "What is MCA eligibility?",
+      "latency_ms": 15.91,
+      "path": "cache",
+      "similarity": 1.0,
+      "n_citations": 4,
+      "grounding_confidence": 0.5286
+    },
+    {
+      "query": "What is the fee structure for BTech?",
+      "latency_ms": 11.34,
+      "path": "cache",
+      "similarity": 1.0,
+      "n_citations": 3,
+      "grounding_confidence": 0.5847
+    },
+    {
+      "query": "Who is the dean of mechanical engineering?",
+      "latency_ms": 11.01,
+      "path": "cache",
+      "similarity": 1.0,
+      "n_citations": 3,
+      "grounding_confidence": 0.5472
+    },
+    {
+      "query": "What are the placement statistics?",
+      "latency_ms": 501.46,
+      "path": "rag",
+      "similarity": null,
+      "n_citations": 6,
+      "grounding_confidence": 0.4911
+    },
+    {
+      "query": "What is the hostel like?",
+      "latency_ms": 19.02,
+      "path": "cache",
+      "similarity": 1.0,
+      "n_citations": 5,
+      "grounding_confidence": 0.5153
+    },
+    {
+      "query": "Tell me about the IEEE student branch.",
+      "latency_ms": 15.36,
+      "path": "cache",
+      "similarity": 1.0,
+      "n_citations": 5,
+      "grounding_confidence": 0.5057
+    },
+    {
+      "query": "What is the curriculum for BTech CSE?",
+      "latency_ms": 12.72,
+      "path": "cache",
+      "similarity": 1.0,
+      "n_citations": 4,
+      "grounding_confidence": 0.6304
+    },
+    {
+      "query": "How is admission to BTech done?",
+      "latency_ms": 11.66,
+      "path": "cache",
+      "similarity": 1.0,
+      "n_citations": 4,
+      "grounding_confidence": 0.5827
+    },
+    {
+      "query": "What is the BTech ENTC curriculum?",
+      "latency_ms": 10.95,
+      "path": "cache",
+      "similarity": 1.0,
+      "n_citations": 4,
+      "grounding_confidence": 0.581
+    },
+    {
+      "query": "Does MITAOE have NAAC accreditation?",
+      "latency_ms": 10.9,
+      "path": "cache",
+      "similarity": 1.0,
+      "n_citations": 4,
+      "grounding_confidence": 0.6877
+    }
+  ],
+  "cache_stats": {
+    "total_entries": 9,
+    "total_hits": 9,
+    "total_misses": 11,
+    "total_evictions": 0,
+    "hit_rate": 0.45,
+    "avg_similarity_at_hit": 1.0,
+    "avg_latency_saved_ms": 0.0,
+    "bytes_on_disk": 0,
+    "section_type_distribution": {
+      "overview": 9
+    }
+  }
+}

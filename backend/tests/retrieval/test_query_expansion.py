@@ -55,3 +55,17 @@ def test_expansion_handles_nac_typo() -> None:
     still finds the accreditation chunks."""
     _, expanded = expand_query("is the college nac graded")
     assert "naac" in expanded
+
+
+def test_expansion_handles_branch_abbreviations() -> None:
+    """Regression: 'fees for entc' missed the Electronics admission page because the
+    corpus uses 'Electronics and Telecommunication' / 'E&TC'."""
+    _, expanded = expand_query("fees for entc")
+    assert "electronics" in expanded
+    assert "telecommunication" in expanded
+
+    _, expanded_cse = expand_query("cse curriculum")
+    assert "computer" in expanded_cse
+
+    _, expanded_mech = expand_query("mech placements")
+    assert "mechanical" in expanded_mech

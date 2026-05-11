@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from backend.reranking.aggregator_boost import boost_score
 from backend.reranking.answerability import compute_answerability_score
 from backend.reranking.duplicate_suppressor import suppress_semantic_duplicates
 from backend.reranking.score_calibrator import calibrate, combine_relevance
@@ -48,9 +49,13 @@ class RerankService:
         for i, candidate in enumerate(candidates):
             raw = float(raw_scores[i])
             calibrated = calibrate(raw)
+            # Aggregator pages (e.g. /student-clubs.php) get a small boost so the
+            # comprehensive listing chunk survives the top-K cutoff even when the
+            # cross-encoder ranks it mid-pack for list-style queries.
+            calibrated_boosted = boost_score(calibrated, candidate.url, candidate.text)
             answerability = compute_answerability_score(candidate.text, candidate.token_count)
             final = combine_relevance(
-                calibrated, answerability,
+                calibrated_boosted, answerability,
                 rerank_weight=rerank_weight,
                 answerability_weight=answerability_weight,
             )
@@ -58,7 +63,7 @@ class RerankService:
                 {
                     "candidate": candidate,
                     "raw": raw,
-                    "calibrated": calibrated,
+                    "calibrated": calibrated_boosted,
                     "answerability": answerability,
                     "final": final,
                 }

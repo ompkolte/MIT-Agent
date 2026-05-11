@@ -31,6 +31,24 @@ SYNONYM_MAP: dict[str, list[str]] = {
     "naac": ["nac", "accreditation"],
     "nba": ["nba accreditation"],
     "cap": ["cet cell", "centralised admission process"],
+    # Branch / department abbreviations used by MITAOE students. Corpus uses the long
+    # forms ("Electronics and Telecommunication", "Computer Science and Engineering"),
+    # so abbreviated queries miss without these synonyms.
+    "entc": ["electronics", "telecommunication", "e&tc"],
+    "e&tc": ["electronics", "telecommunication", "entc"],
+    "etc": ["electronics", "telecommunication"],
+    "electronics": ["entc", "e&tc", "telecommunication"],
+    "cse": ["computer science", "computer engineering"],
+    "ce": ["computer engineering"],
+    "it": ["information technology"],
+    "ai": ["artificial intelligence", "machine learning"],
+    "ml": ["machine learning"],
+    "ds": ["data science"],
+    "civil": ["civil engineering"],
+    "mech": ["mechanical", "mechanical engineering"],
+    "mechanical": ["mech"],
+    "chem": ["chemical", "chemical engineering"],
+    "chemical": ["chem"],
 }
 
 

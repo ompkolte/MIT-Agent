@@ -197,6 +197,19 @@ CHAT_UI_HTML = """
       });
     }
 
+    // Return the source_url of the first [N] marker that appears in `text`, mapped
+    // via `citations`. The user expects the preview pane to reflect the page the LLM
+    // actually grounded its answer on — which is the first cited chunk, not citations[0]
+    // (which is just the highest-reranked retrieved chunk and may be off-topic).
+    function firstCitedUrl(text, citations) {
+      if (!text || !citations || !citations.length) return null;
+      const indexToUrl = {};
+      citations.forEach(c => { indexToUrl[c.index] = c.source_url; });
+      const m = /\\[(\\d+)\\]/.exec(text);
+      if (!m) return null;
+      return indexToUrl[Number(m[1])] || null;
+    }
+
     function citationsBlock(citations) {
       if (!citations || !citations.length) return '';
       return `<div class="citations">${citations.map(c => `
@@ -271,10 +284,11 @@ CHAT_UI_HTML = """
         ${debug}
       `;
       div.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      // Auto-load the first citation's source page in the preview pane.
-      if ((a.citations || []).length > 0) {
-        showPreview(a.citations[0].source_url);
-      }
+      // Auto-load the page the answer actually cites first (e.g. the [4] in the text),
+      // not citations[0] — the top-reranked chunk is often a generic aggregator that
+      // the LLM didn't ground on.
+      const url = firstCitedUrl(a.answer, a.citations) || ((a.citations || [])[0] || {}).source_url;
+      if (url) showPreview(url);
     }
 
     // Click any citation (inline [N] pill or card) → preview that source page in the right pane.
@@ -330,6 +344,7 @@ CHAT_UI_HTML = """
       const metaEl = placeholder.querySelector('.meta');
       let buffer = '';
       let metaInfo = {};
+      let previewLoaded = false;
       const response = await fetch('/chat/stream', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -363,13 +378,6 @@ CHAT_UI_HTML = """
             metaInfo = payload;
             sessionId = payload.session_id || sessionId;
             if (sessionId) localStorage.setItem('chat_session_id', sessionId);
-            // Auto-load the top retrieved source page in the preview pane as soon as the
-            // stream's meta arrives — happens BEFORE the first token. Subsequent clicks
-            // on [N] markers will switch the iframe to that specific citation.
-            const cits = payload.citations || [];
-            if (cits.length > 0 && cits[0].source_url) {
-              showPreview(cits[0].source_url);
-            }
           } else if (evtName === 'abstain') {
             placeholder.className = 'msg abstain';
             bodyEl.textContent = 'I could not find reliable information about that in the MITAOE data.';
@@ -386,10 +394,23 @@ CHAT_UI_HTML = """
             buffer += payload.delta;
             const liveCits = metaInfo.citations || [];
             bodyEl.innerHTML = renderAnswerText(buffer, liveCits) + '<span class="streaming-cursor"></span>';
+            // Auto-load the preview the moment the FIRST [N] arrives in the stream so
+            // the iframe matches the page the LLM is actually grounding on (not the
+            // top-reranked candidate, which can be an off-topic aggregator).
+            if (!previewLoaded) {
+              const url = firstCitedUrl(buffer, liveCits);
+              if (url) { showPreview(url); previewLoaded = true; }
+            }
           }
           if (payload.done) {
             const finalCits = metaInfo.citations || [];
             bodyEl.innerHTML = renderAnswerText(buffer, finalCits);
+            // Fallback: if the answer streamed without any [N] markers, load the
+            // top retrieved page so the pane isn't empty.
+            if (!previewLoaded && finalCits.length > 0 && finalCits[0].source_url) {
+              showPreview(finalCits[0].source_url);
+              previewLoaded = true;
+            }
             const conf = `<span class="pill">grounding ${(metaInfo.grounding_confidence ?? 0).toFixed(2)}</span>`;
             const rewritten = metaInfo.was_rewritten
               ? `<span class="pill rewrite">rewrote → ${escapeHtml(metaInfo.rewritten_query || '')}</span>` : '';

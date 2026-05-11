@@ -50,7 +50,7 @@ class GroundedAnsweringService:
                 rewritten_query=rewritten_query,
             )
 
-        answer_text, provider_name, model_used = generate_answer(
+        answer_text, provider_name, model_used, in_tok, out_tok = generate_answer(
             provider=self.provider,
             query=query,
             grounded_context=grounded_context,
@@ -65,6 +65,7 @@ class GroundedAnsweringService:
                 rewritten_query=rewritten_query,
                 provider=provider_name,
                 model=model_used,
+                usage=TokenUsage(input_tokens=in_tok, output_tokens=out_tok, total_calls=1),
             )
 
         citations = build_citations(answer_text, grounded_context.context_blocks)
@@ -83,6 +84,14 @@ class GroundedAnsweringService:
             else HallucinationCheck()
         )
 
+        usage = TokenUsage(
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            judge_input_tokens=hallucination.judge_input_tokens,
+            judge_output_tokens=hallucination.judge_output_tokens,
+            total_calls=1 + (1 if hallucination.judge_used else 0),
+        )
+
         post_abstain, post_reason = should_abstain(grounded_context, hallucination=hallucination)
         if post_abstain and post_reason and post_reason.startswith("high_hallucination_risk"):
             return self._abstention_response(
@@ -93,6 +102,7 @@ class GroundedAnsweringService:
                 hallucination=hallucination,
                 provider=provider_name,
                 model=model_used,
+                usage=usage,
             )
 
         confidence = compute_answer_confidence(grounded_context, hallucination, citation_coverage)
@@ -110,6 +120,7 @@ class GroundedAnsweringService:
             rewritten_query=rewritten_query,
             provider=provider_name,
             model=model_used,
+            usage=usage,
         )
 
     def _abstention_response(
@@ -121,6 +132,7 @@ class GroundedAnsweringService:
         hallucination: HallucinationCheck | None = None,
         provider: str = "",
         model: str = "",
+        usage: TokenUsage | None = None,
     ) -> GroundedAnswer:
         return GroundedAnswer(
             query=query,
@@ -137,4 +149,5 @@ class GroundedAnsweringService:
             rewritten_query=rewritten_query,
             provider=provider,
             model=model,
+            usage=usage or TokenUsage(),
         )

@@ -56,6 +56,7 @@ CHAT_UI_HTML = """
     <div class="toolbar">
       <label><input type="checkbox" id="streamToggle" checked /> stream tokens</label>
       <label title="Adds 1 extra Gemini call per non-streaming answer for hallucination detection. Off by default to save quota."><input type="checkbox" id="judgeToggle" /> run hallucination judge (extra call)</label>
+      <span id="usageBadge" class="pill" title="Gemini calls/tokens consumed this browser session">calls 0 · tokens 0/0</span>
       <span style="flex:1"></span>
       <button class="pill" id="resetBtn" type="button">reset chat</button>
     </div>
@@ -84,8 +85,20 @@ CHAT_UI_HTML = """
     const streamToggle = document.getElementById('streamToggle');
     const judgeToggle = document.getElementById('judgeToggle');
     const providerBadge = document.getElementById('providerBadge');
+    const usageBadge = document.getElementById('usageBadge');
     let sessionId = localStorage.getItem('chat_session_id') || null;
     let busy = false;
+    let sessionCalls = 0;
+    let sessionInTokens = 0;
+    let sessionOutTokens = 0;
+
+    function updateUsage(usage) {
+      if (!usage) return;
+      sessionCalls += usage.total_calls || 0;
+      sessionInTokens += (usage.input_tokens || 0) + (usage.judge_input_tokens || 0);
+      sessionOutTokens += (usage.output_tokens || 0) + (usage.judge_output_tokens || 0);
+      usageBadge.textContent = `calls ${sessionCalls} · tokens ${sessionInTokens}/${sessionOutTokens}`;
+    }
 
     fetch('/chat/provider').then(r => r.json()).then(info => {
       providerBadge.textContent = `provider: ${info.provider} (${info.default_model})`;
@@ -217,6 +230,7 @@ CHAT_UI_HTML = """
       sessionId = data.session_id;
       localStorage.setItem('chat_session_id', sessionId);
       renderAssistant(placeholder, data);
+      updateUsage(data.answer && data.answer.usage);
     }
 
     async function streamQuery(query, placeholder) {
@@ -274,6 +288,8 @@ CHAT_UI_HTML = """
             const rewritten = metaInfo.was_rewritten
               ? `<span class="pill rewrite">rewrote → ${escapeHtml(metaInfo.rewritten_query || '')}</span>` : '';
             metaEl.innerHTML = `${conf} ${rewritten} <span class="pill">streamed</span>`;
+            // Streaming endpoint doesn't surface token counts; count 1 call (plus 1 if rewritten).
+            updateUsage({ total_calls: 1 + (metaInfo.was_rewritten ? 1 : 0) });
           }
         }
       }

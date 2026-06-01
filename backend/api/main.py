@@ -45,6 +45,16 @@ configure_logging()
 app = FastAPI(title="College AI Assistant Backend", version="0.1.0")
 
 
+@app.get("/")
+async def root():
+    return {"status": "ok", "ui": "/chat/ui", "docs": "/docs"}
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.post("/ingest", response_model=IngestionStats)
 async def ingest(file: UploadFile = File(...)) -> IngestionStats:
     service = IngestionService()

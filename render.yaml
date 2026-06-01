@@ -8,7 +8,7 @@ services:
     # The embedding model + reranker + BM25 index needs ~1.5 GB; use at least "starter"
     plan: starter
     # Render sets PORT automatically; our CMD reads it
-    healthCheckPath: /docs
+    healthCheckPath: /health
     envVars:
       # --- LLM provider keys: set these in the Render dashboard, NOT here ---
       # Add GROQ_API_KEY, GOOGLE_API_KEY, etc. as secret env vars in the dashboard.

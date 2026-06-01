@@ -32,5 +32,5 @@ datasets/test_processed_documents.ndjson
 datasets/test_bm25_chunks.jsonl
 reports/test/
 
-# Qdrant lock file (runtime-only, causes permission errors on Windows)
-datasets/qdrant_storage/.lock
+# Qdrant runtime storage
+datasets/qdrant_storage/

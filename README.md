@@ -1,3 +1,13 @@
+---
+title: MITAOE Assistant
+emoji: 🎓
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # MITAOE Assistant
 
 A grounded, retrieval-augmented question-answering system for **MIT Academy of Engineering (MITAOE)**. Built as an explainable RAG stack — every answer is grounded in a specific chunk of the institutional corpus, cited inline, and validated before being shown to the user.

@@ -2,10 +2,13 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-# Render injects PORT at runtime; default to 8000 for local use
-ENV PORT=8000
+# HF Spaces requires port 7860; fallback to 8000 for local use
+ENV PORT=7860
 
 WORKDIR /app
+
+# HF Spaces runs as non-root — ensure /app is writable
+RUN chmod -R 777 /app
 
 # Install uv for fast dependency resolution
 RUN pip install --no-cache-dir uv
@@ -21,7 +24,7 @@ COPY backend ./backend
 # These are the offline-pipeline artifacts — no rebuild needed at runtime
 COPY datasets ./datasets
 
-EXPOSE $PORT
+EXPOSE 7860
 
 # Use shell form so $PORT is expanded at runtime
 CMD uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT
